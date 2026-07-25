@@ -303,6 +303,7 @@ void CSio2::ProcessController(unsigned int portId, size_t outputOffset, uint32 d
 
 		unsigned int slot = Multitap::IsEnabled(portId) ? m_currentSlot[portId] : 0;
 		unsigned int padId = Multitap::PadIndex(portId, slot);
+		Multitap::Trace("Sio2::Controller port=%d slot=%d pad=%d cmd=0x%02X", portId, slot, padId, m_inputBuffer[1]);
 		if(padId >= MAX_PADS) return;
 		auto& padState = m_padState[padId];
 	//<<< PLAYSTATION-PORTFOLIO MULTITAP
@@ -495,6 +496,7 @@ void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dst
 	//an enabled tap behave exactly as upstream (Time Crisis 3 keeps working),
 	//ports with one answer for real.
 	bool tapEnabled = Multitap::IsEnabled(portId);
+	Multitap::Trace("Sio2::Multitap port=%d cmd=0x%02X tap=%d", portId, m_inputBuffer[1], tapEnabled ? 1 : 0);
 	if(!tapEnabled)
 	{
 		m_stat6C = 0x10000;

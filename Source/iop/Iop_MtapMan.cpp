@@ -40,6 +40,7 @@ void CMtapMan::Invoke(CMIPS& context, unsigned int functionId)
 
 bool CMtapMan::Invoke901(uint32 method, uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, uint8* ram)
 {
+	Multitap::Trace("MtapMan::0x901 method=%d arg0=%d", method, argsSize ? args[0] : -1);
 	switch(method)
 	{
 	case 1:
@@ -54,6 +55,7 @@ bool CMtapMan::Invoke901(uint32 method, uint32* args, uint32 argsSize, uint32* r
 
 bool CMtapMan::Invoke902(uint32 method, uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, uint8* ram)
 {
+	Multitap::Trace("MtapMan::0x902 method=%d arg0=%d", method, argsSize ? args[0] : -1);
 	switch(method)
 	{
 	//>>> PLAYSTATION-PORTFOLIO MULTITAP
@@ -73,6 +75,7 @@ bool CMtapMan::Invoke902(uint32 method, uint32* args, uint32 argsSize, uint32* r
 
 bool CMtapMan::Invoke903(uint32 method, uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, uint8* ram)
 {
+	Multitap::Trace("MtapMan::0x903 method=%d arg0=%d", method, argsSize ? args[0] : -1);
 	switch(method)
 	{
 	//>>> PLAYSTATION-PORTFOLIO MULTITAP

@@ -26,6 +26,16 @@ namespace Iop
 			MAX_PADS = MAX_PORTS * MAX_SLOTS, //8
 		};
 
+		//—— tracing ————————————————————————————————————————————————————
+		//Play!'s own CLog compiles to a NO-OP in release builds
+		//(LOGGING_ENABLED == 0), so none of its Print/Warn calls exist in the
+		//wasm we ship. This is a separate, always-compiled trace that emscripten
+		//routes to console.log, gated at runtime so it costs nothing when off.
+		//It is the only way to see what a real game actually asks for.
+		bool IsTracing();
+		void SetTracing(bool);
+		void Trace(const char* fmt, ...);
+
 		//Per-port enable. Set before a disc boots; not expected to change while
 		//a game is running (a game latches slot counts at init).
 		bool IsEnabled(unsigned int port);

@@ -50,6 +50,12 @@ bool CPadMan::Invoke(uint32 method, uint32* args, uint32 argsSize, uint32* ret, 
 {
 	assert(method == 1);
 	method = args[0];
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//★ The decisive signal: if NOTHING appears here while a game runs, the game
+	//has loaded its own padman.irx and bypassed HLE entirely — meaning input is
+	//going through the low-level CSio2 path instead.
+	Multitap::Trace("PadMan::Invoke cmd=0x%08X", method);
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	switch(method)
 	{
 	case 0x00000001:
@@ -88,6 +94,9 @@ bool CPadMan::Invoke(uint32 method, uint32* args, uint32 argsSize, uint32* ret, 
 		break;
 	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
+		//>>> PLAYSTATION-PORTFOLIO MULTITAP
+		Multitap::Trace("PadMan::Invoke UNHANDLED cmd=0x%08X", method);
+		//<<< PLAYSTATION-PORTFOLIO MULTITAP
 		CLog::GetInstance().Warn(LOG_NAME, "Unknown method invoked (0x%08X).\r\n", method);
 		break;
 	}
@@ -203,6 +212,7 @@ void CPadMan::GetSlotMax(uint32* args, uint32 argsSize, uint32* ret, uint32 retS
 	uint32 port = args[1];
 	uint32 slots = ((port < MAX_PORTS) && Multitap::IsEnabled(port)) ? MAX_SLOTS : 1;
 	ret[3] = slots;
+	Multitap::Trace("PadMan::GetSlotMax(port=%d) = %d", port, slots);
 	CLog::GetInstance().Print(LOG_NAME, "GetSlotMax(port = %d) = %d;\r\n", port, slots);
 }
 //<<< PLAYSTATION-PORTFOLIO MULTITAP
@@ -222,6 +232,7 @@ void CPadMan::Open(uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, u
 	if((port < MAX_PORTS) && (slot < MAX_SLOTS))
 	{
 		m_padDataAddress[port][slot] = address;
+		Multitap::Trace("PadMan::Open(port=%d, slot=%d, addr=0x%08X)", port, slot, address);
 		m_padDataType = GetDataType(ram + address);
 	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
