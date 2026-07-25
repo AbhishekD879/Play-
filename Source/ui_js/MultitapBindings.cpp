@@ -15,6 +15,10 @@
 
 #include <emscripten/bind.h>
 #include "../iop/Iop_MultitapConfig.h"
+#include "../input/PH_GenericInput.h"
+#include "Ps2VmJs.h"
+
+extern CPs2VmJs* g_virtualMachine;
 
 namespace
 {
@@ -42,12 +46,31 @@ namespace
 	}
 
 	void SetMultitapTracing(bool on) { Iop::Multitap::SetTracing(on); }
+
+	//—— test hook ————————————————————————————————————————————————————————
+	// Reads a pad binding's LIVE value. GetBindingValue resolves straight from
+	// the input provider, so this needs no disc and no running game — which is
+	// the point: 'is pad N actually bound and receiving keys?' was being
+	// answered by asking the user to boot a real game and report back, over and
+	// over. It is answerable here in milliseconds.
+	//
+	//   Module.getPadButton(0, 14)  -> CROSS on pad 1
+	int GetPadButton(unsigned int pad, unsigned int button)
+	{
+		if(!g_virtualMachine) return -1;
+		auto padHandler = static_cast<CPH_GenericInput*>(g_virtualMachine->GetPadHandler());
+		if(!padHandler) return -1;
+		if(button >= PS2::CControllerInfo::MAX_BUTTONS) return -1;
+		return static_cast<int>(padHandler->GetBindingManager().GetBindingValue(
+		    pad, static_cast<PS2::CControllerInfo::BUTTON>(button)));
+	}
 	void SetMultitapSlotSwitching(bool on) { Iop::Multitap::SetSlotSwitching(on); }
 }
 
 EMSCRIPTEN_BINDINGS(PortfolioMultitap)
 {
 	emscripten::function("setMultitapTracing", &SetMultitapTracing);
+	emscripten::function("getPadButton", &GetPadButton);
 	emscripten::function("setMultitapSlotSwitching", &SetMultitapSlotSwitching);
 	emscripten::function("setMultitapEnabled", &SetMultitapEnabled);
 	emscripten::function("getMultitapEnabled", &GetMultitapEnabled);
