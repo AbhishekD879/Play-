@@ -45,20 +45,6 @@ bool CMtapMan::Invoke901(uint32 method, uint32* args, uint32 argsSize, uint32* r
 	case 1:
 		ret[1] = PortOpen(args[0]);
 		break;
-	//>>> PLAYSTATION-PORTFOLIO MULTITAP
-	//Upstream implements method 1 only. libmtap's other entry points fell
-	//through to the "unknown method" warning and returned nothing, which reads
-	//to a game as "no multitap".
-	case 2:
-		ret[1] = PortClose(args[0]);
-		break;
-	case 3:
-		ret[1] = GetConnection(args[0]);
-		break;
-	case 4:
-		ret[1] = GetSlotNumber(args[0]);
-		break;
-	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
 		CLog::GetInstance().Warn(LOG_NAME, "Unknown method invoked (0x%08X, 0x%08X).\r\n", 0x901, method);
 		break;
@@ -70,6 +56,14 @@ bool CMtapMan::Invoke902(uint32 method, uint32* args, uint32 argsSize, uint32* r
 {
 	switch(method)
 	{
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//MTAPSERV_PORT_CLOSE (0x80000902). ps2sdk's mtapPortClose does
+	//sceSifCallRpc(&clientPortClose, 1, ...) with args[0] = port and reads
+	//back mtapRpcBuffer[1] — so METHOD 1 on THIS module, result in ret[1].
+	case 1:
+		ret[1] = PortClose(args[0]);
+		break;
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
 		CLog::GetInstance().Warn(LOG_NAME, "Unknown method invoked (0x%08X, 0x%08X).\r\n", 0x902, method);
 		break;
@@ -81,6 +75,15 @@ bool CMtapMan::Invoke903(uint32 method, uint32* args, uint32 argsSize, uint32* r
 {
 	switch(method)
 	{
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//★ MTAPSERV_GET_CONNECTION (0x80000903) — this is the call a game makes to
+	//ask "is a multitap attached to this port?". It is a SEPARATE SIF module,
+	//not a method on 0x901; wiring it there left this switch empty, so the
+	//question went unanswered and every game concluded there was no tap.
+	case 1:
+		ret[1] = GetConnection(args[0]);
+		break;
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
 		CLog::GetInstance().Warn(LOG_NAME, "Unknown method invoked (0x%08X, 0x%08X).\r\n", 0x903, method);
 		break;

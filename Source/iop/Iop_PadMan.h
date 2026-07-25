@@ -210,6 +210,10 @@ namespace Iop
 		//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
 		void Open(uint32*, uint32, uint32*, uint32, uint8*);
+		//>>> PLAYSTATION-PORTFOLIO MULTITAP
+		void GetPortMax(uint32*, uint32, uint32*, uint32, uint8*);
+		void GetSlotMax(uint32*, uint32, uint32*, uint32, uint8*);
+		//<<< PLAYSTATION-PORTFOLIO MULTITAP
 		void SetMainMode(uint32*, uint32, uint32*, uint32, uint8*);
 		void Close(uint32*, uint32, uint32*, uint32, uint8*);
 		void SetActuatorAlign(uint32*, uint32, uint32*, uint32, uint8*);

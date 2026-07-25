@@ -71,6 +71,22 @@ bool CPadMan::Invoke(uint32 method, uint32* args, uint32 argsSize, uint32* ret, 
 	case 0x00000012:
 		GetModuleVersion(args, argsSize, ret, retSize, ram);
 		break;
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//★ padGetPortMax / padGetSlotMax. Upstream implements neither, so both fell
+	//to the "unknown method" warning and the game read back whatever was in the
+	//buffer — which is why a multitap was never discovered even once the tap
+	//itself reported present. ps2sdk names these GET_PORTMAX (0x0C / 0x8000010B)
+	//and GET_SLOTMAX (0x0D / 0x8000010C); the layout matches Open() above,
+	//args[1] = port and the result in ret[3].
+	case 0x0000000C:
+	case 0x8000010B:
+		GetPortMax(args, argsSize, ret, retSize, ram);
+		break;
+	case 0x0000000D:
+	case 0x8000010C:
+		GetSlotMax(args, argsSize, ret, retSize, ram);
+		break;
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
 		CLog::GetInstance().Warn(LOG_NAME, "Unknown method invoked (0x%08X).\r\n", method);
 		break;
@@ -173,6 +189,23 @@ void CPadMan::SetAxisState(unsigned int padNumber, CControllerInfo::BUTTON butto
 	ExecutePadDataFunction(std::bind(&CPadMan::PDF_SetAxisState, std::placeholders::_1, button, axisValue),
 	                       ram + padDataAddress, PADNUM);
 }
+
+//>>> PLAYSTATION-PORTFOLIO MULTITAP
+void CPadMan::GetPortMax(uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, uint8* ram)
+{
+	//Always two physical controller ports — a multitap adds slots, not ports.
+	ret[3] = MAX_PORTS;
+	CLog::GetInstance().Print(LOG_NAME, "GetPortMax() = %d;\r\n", MAX_PORTS);
+}
+
+void CPadMan::GetSlotMax(uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, uint8* ram)
+{
+	uint32 port = args[1];
+	uint32 slots = ((port < MAX_PORTS) && Multitap::IsEnabled(port)) ? MAX_SLOTS : 1;
+	ret[3] = slots;
+	CLog::GetInstance().Print(LOG_NAME, "GetSlotMax(port = %d) = %d;\r\n", port, slots);
+}
+//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
 void CPadMan::Open(uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, uint8* ram)
 {
