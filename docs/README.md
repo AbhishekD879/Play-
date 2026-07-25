@@ -1,5 +1,9 @@
 # Multitap fork of Play!
 
+**Fork:** https://github.com/AbhishekD879/Play- (branch `multitap`)
+**Upstream:** https://github.com/jpd002/Play- · BSD-2-Clause
+**Baseline:** `50aedca` (2026-07-11)
+
 This branch (`multitap`) adds PS2 multitap emulation to jpd002/Play-, enabling up
 to 8 controllers instead of 2.
 
