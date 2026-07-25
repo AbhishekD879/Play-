@@ -293,17 +293,19 @@ void CSio2::ProcessCommand()
 void CSio2::ProcessController(unsigned int portId, size_t outputOffset, uint32 dstSize, uint32 srcSize)
 {
 	//>>> PLAYSTATION-PORTFOLIO MULTITAP
-	//Upstream: `portId < MAX_PADS` with MAX_PADS == 2, and `padId = portId & 1`.
-	//MAX_PADS is now 8, so bound against the real controller-port count instead,
-	//and resolve the pad through the multitap slot currently selected on it.
-	if(portId < Multitap::MAX_PORTS)
+	//★ portId here is the SIO2 QUEUE INDEX (currentReg & 0x03), not a physical
+	//controller port. Upstream folds it with `padId = portId & 1`; an earlier
+	//version of this patch replaced that with `portId < MAX_PORTS`, which
+	//silently dropped queue indices 2 and 3. Keep upstream's fold.
+	if(true)
 	{
 		assert(dstSize >= 3);
 		assert(srcSize >= 3);
 
-		unsigned int slot = Multitap::IsEnabled(portId) ? m_currentSlot[portId] : 0;
-		unsigned int padId = Multitap::PadIndex(portId, slot);
-		Multitap::Trace("Sio2::Controller port=%d slot=%d pad=%d cmd=0x%02X", portId, slot, padId, m_inputBuffer[1]);
+		unsigned int physPort = portId & 1;
+		unsigned int slot = Multitap::IsEnabled(physPort) ? m_currentSlot[physPort] : 0;
+		unsigned int padId = Multitap::PadIndex(physPort, slot);
+		Multitap::Trace("Sio2::Controller q=%d port=%d slot=%d pad=%d cmd=0x%02X", portId, physPort, slot, padId, m_inputBuffer[1]);
 		if(padId >= MAX_PADS) return;
 		auto& padState = m_padState[padId];
 	//<<< PLAYSTATION-PORTFOLIO MULTITAP
@@ -495,8 +497,14 @@ void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dst
 	//We now DO support it, so the suppression becomes conditional: ports without
 	//an enabled tap behave exactly as upstream (Time Crisis 3 keeps working),
 	//ports with one answer for real.
-	bool tapEnabled = Multitap::IsEnabled(portId);
-	Multitap::Trace("Sio2::Multitap port=%d cmd=0x%02X tap=%d", portId, m_inputBuffer[1], tapEnabled ? 1 : 0);
+	//★ Same fold as ProcessController: portId is the SIO2 queue index. A real
+	//game probes the multitap on queue indices 2 and 3 (observed with a
+	//6-player disc), which are physical ports 0 and 1. Testing IsEnabled(2)
+	//and IsEnabled(3) is out of range and always answered "no tap" — which is
+	//why the tap was never discovered even with both ports enabled.
+	unsigned int physPort = portId & 1;
+	bool tapEnabled = Multitap::IsEnabled(physPort);
+	Multitap::Trace("Sio2::Multitap q=%d port=%d cmd=0x%02X tap=%d", portId, physPort, m_inputBuffer[1], tapEnabled ? 1 : 0);
 	if(!tapEnabled)
 	{
 		m_stat6C = 0x10000;
@@ -516,12 +524,12 @@ void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dst
 		//ChangeSlot — upstream always answered 0 (failure) and tracked nothing.
 		//The requested slot arrives in the input buffer; latch it so the next
 		//controller poll on this port reads the right pad.
-		if(tapEnabled && (portId < Multitap::MAX_PORTS))
+		if(tapEnabled)
 		{
 			uint8 wanted = m_inputBuffer[0x03];
 			if(wanted < Multitap::MAX_SLOTS)
 			{
-				m_currentSlot[portId] = wanted;
+				m_currentSlot[physPort] = wanted;
 			}
 			m_outputBuffer[outputOffset + 0x05] = 1; //success
 		}
@@ -529,8 +537,9 @@ void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dst
 		{
 			m_outputBuffer[outputOffset + 0x05] = 0;
 		}
+		Multitap::Trace("Sio2::ChangeSlot port=%d -> slot=%d ok=%d", physPort, m_currentSlot[physPort], tapEnabled ? 1 : 0);
 		CLog::GetInstance().Print(LOG_NAME, "Multitap: ChangeSlot(port = %d, slot = %d);\r\n",
-		                          portId, (portId < Multitap::MAX_PORTS) ? m_currentSlot[portId] : 0);
+		                          physPort, m_currentSlot[physPort]);
 		break;
 	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
