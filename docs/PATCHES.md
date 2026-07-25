@@ -245,3 +245,51 @@ iterating pads `0..MAX_PADS` and calling `SetButtonState(pad, ...)`; `CPadMan` w
 simply dropping everything above 1. Widening the binding manager and teaching the
 two sinks about slots was enough — no new plumbing through `PadHandler`/`PS2VM`
 was needed, so **planned patch P5 was not required at all**.
+
+---
+
+## Verified against a real game (WWE SmackDown! HCTP, 4.2 GB ISO)
+
+Run locally in Chrome via Playwright against `play-mt/index.html`, driving the
+canvas with synthetic key events and reading the result off the framebuffer.
+No user in the loop.
+
+| Engine | Taps | Result |
+|---|---|---|
+| stock `/play/` | n/a | START works → main menu |
+| fork `/play-mt/` | **off** | START works → main menu |
+| fork `/play-mt/` | **on at boot** | START ignored → falls through to attract DEMO |
+| fork `/play-mt/` | **toggled on mid-game** | input keeps working (menu still moves) |
+
+### What this establishes
+
+The fork build is **not** the problem. With taps off it is behaviourally
+identical to stock on a real game, so `MAX_PADS = 8`, the six-pad input profile
+and the SIO2/PadMan restructuring are all sound. `getPadButton` also shows pad 1
+resolving keys correctly in every configuration.
+
+**Enabling a tap BEFORE the game initialises its pads is what breaks input** —
+and only then. Toggling the same flag once the game is running changes nothing,
+which means the failure is in the game's pad ENUMERATION path, not in per-frame
+polling. The game asks about the tap during init, our answers are incomplete, it
+concludes no usable controller exists, and every pad — including player one —
+goes dead.
+
+This is precisely the failure upstream predicted in the comment this patch made
+conditional:
+
+> "We don't properly support multitap at the moment, so, no point in giving the
+>  impression we have one."
+
+Claiming a tap is only safe once the whole protocol is answered. GetSlotNumber
+plus a ChangeSlot stub is not enough.
+
+### Remaining work
+
+Implement the full multitap SIO2 protocol as the game exercises it at init, not
+the subset. Capture the real command sequence first (`?mtaptrace=1` prints every
+command and the raw ChangeSlot payload, whose offset is still unverified and is
+why slot switching sits behind `?mtapslots`).
+
+Until that is done, taps must stay off by default. The console ships the stock
+engine; the fork is reachable only via `?engine=multitap`.
