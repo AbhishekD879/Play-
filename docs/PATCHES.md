@@ -293,3 +293,26 @@ why slot switching sits behind `?mtapslots`).
 
 Until that is done, taps must stay off by default. The console ships the stock
 engine; the fork is reachable only via `?engine=multitap`.
+
+## Resolved: the two defects that broke pad enumeration
+
+Captured from a real game's wire traffic, then fixed and re-verified against it.
+
+**1. Responses were unframed.** Every other SIO2 device in this file answers
+`[0]=0xFF, [1]=id, [2]=0x5A, …`. The multitap handler wrote only the slot count
+at `[3]` and left `[0..2]` as zeros, so the game read "no device present",
+rejected the tap and abandoned pad enumeration — taking player one with it.
+Now framed like its neighbours, with a `0x5A` terminator.
+
+**2. The ChangeSlot offset was wrong.** Real requests are:
+
+    21 21 <slot> 00 00 00 00 00     cmd 0x21, dst=7
+
+The slot index is byte **[2]**. It had been guessed as [3], which reads a
+constant `00`, pinning every port to slot 0 — the game then saw four identical
+pads per port and gave up.
+
+The full init sequence a game actually issues is small: `0x12` and `0x13`
+(dst=6) per port, then `0x21` (dst=7) cycling slots 0-3 on each port. Nothing
+else. Verified end to end: with both taps on and 8 pads, WWE SmackDown! HCTP
+boots to its main menu and responds to player one.

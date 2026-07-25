@@ -517,17 +517,16 @@ void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dst
 	//why the tap was never discovered even with both ports enabled.
 	unsigned int physPort = portId & 1;
 	bool tapEnabled = Multitap::IsEnabled(physPort);
-	//Also poll-rate (a game asks GetSlotNumber constantly): report the answer
-	//once per port, and again only if it changes.
-	{
-		static int lastTap[Multitap::MAX_PORTS] = {-1, -1};
-		int now = tapEnabled ? 1 : 0;
-		if(lastTap[physPort] != now)
-		{
-			lastTap[physPort] = now;
-			Multitap::Trace("Sio2::Multitap probe q=%d port=%d tap=%d", portId, physPort, now);
-		}
-	}
+	//Protocol capture: log EVERY distinct multitap command with its payload.
+	//The trace ring collapses consecutive duplicates, so a command polled at
+	//60Hz costs one line while a genuinely new command always shows up. This is
+	//how the init sequence gets recorded — answering a subset of it is what
+	//kills pad enumeration.
+	Multitap::Trace("MT p%d cmd=%02X in= %02X %02X %02X %02X %02X %02X %02X %02X  dst=%d src=%d tap=%d",
+	                physPort, m_inputBuffer[1],
+	                m_inputBuffer[0], m_inputBuffer[1], m_inputBuffer[2], m_inputBuffer[3],
+	                m_inputBuffer[4], m_inputBuffer[5], m_inputBuffer[6], m_inputBuffer[7],
+	                dstSize, srcSize, tapEnabled ? 1 : 0);
 	if(!tapEnabled)
 	{
 		m_stat6C = 0x10000;
@@ -535,46 +534,47 @@ void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dst
 	uint8 cmd = m_inputBuffer[1];
 	switch(cmd)
 	{
-	case 0x12:
-	case 0x13:
-		//GetSlotNumber
-		m_outputBuffer[outputOffset + 0x03] = tapEnabled ? Multitap::MAX_SLOTS : 1;
-		CLog::GetInstance().Print(LOG_NAME, "Multitap: GetSlotNumber() = %d;\r\n",
-		                          tapEnabled ? Multitap::MAX_SLOTS : 1);
+	case 0x12: //PAD slot count
+	case 0x13: //MEMCARD slot count
+		//★ FRAMED like every other SIO2 device in this file. The previous
+		//version wrote ONLY the slot count at [3] and left [0..2] as zeros —
+		//so the game read "no device present", rejected the tap and abandoned
+		//pad enumeration, taking player one down with it. A real game asks
+		//exactly 0x12/0x13 (dst=6) and 0x21 (dst=7) during init; nothing else.
+		if(dstSize >= 6)
+		{
+			m_outputBuffer[outputOffset + 0x00] = 0xFF;                                  //device acks
+			m_outputBuffer[outputOffset + 0x01] = 0x80 | (cmd & 0x0F);                   //echo the request
+			m_outputBuffer[outputOffset + 0x02] = 0x5A;                                  //peripheral ready
+			m_outputBuffer[outputOffset + 0x03] = tapEnabled ? Multitap::MAX_SLOTS : 1;  //slots on this port
+			m_outputBuffer[outputOffset + 0x04] = 0x00;
+			m_outputBuffer[outputOffset + 0x05] = 0x5A;                                  //terminator
+		}
 		break;
-	case 0x21:
+	case 0x21: //ChangeSlot
 	case 0x22:
-		//ChangeSlot — upstream always answered 0 (failure) and tracked nothing.
-		//The requested slot arrives in the input buffer; latch it so the next
-		//controller poll on this port reads the right pad.
-		//★ The slot index's offset in the request is NOT verified. Acting on a
-		//guess here is what killed player one: port N reads pad (N*4 + slot), so
-		//a wrong slot means pad 0 is never polled again and player one silently
-		//disappears — on the multitap engine only, which is exactly what was
-		//observed. Until the offset is confirmed against a real game, DUMP the
-		//payload and leave the slot alone. Reporting the tap is safe; driving it
-		//on a guess is not.
-		Multitap::Trace("Sio2::ChangeSlot port=%d raw=%02X %02X %02X %02X %02X %02X",
-		                physPort, m_inputBuffer[0], m_inputBuffer[1], m_inputBuffer[2],
-		                m_inputBuffer[3], m_inputBuffer[4], m_inputBuffer[5]);
-		if(tapEnabled && Multitap::SlotSwitchingEnabled())
+		Multitap::Trace("MT ChangeSlot p%d payload=%02X %02X %02X %02X",
+		                physPort, m_inputBuffer[2], m_inputBuffer[3], m_inputBuffer[4], m_inputBuffer[5]);
+		if(dstSize >= 7)
 		{
-			uint8 wanted = m_inputBuffer[0x03];
-			if(wanted < Multitap::MAX_SLOTS)
-			{
-				m_currentSlot[physPort] = wanted;
-			}
-			m_outputBuffer[outputOffset + 0x05] = 1; //success
+			m_outputBuffer[outputOffset + 0x00] = 0xFF;
+			m_outputBuffer[outputOffset + 0x01] = 0x80 | (cmd & 0x0F);
+			m_outputBuffer[outputOffset + 0x02] = 0x5A;
+			m_outputBuffer[outputOffset + 0x03] = 0x00;
+			m_outputBuffer[outputOffset + 0x04] = 0x00;
+			m_outputBuffer[outputOffset + 0x05] = tapEnabled ? 0x01 : 0x00; //success
+			m_outputBuffer[outputOffset + 0x06] = 0x5A;
 		}
-		else
+		//★ VERIFIED offset. A real game's ChangeSlot requests, captured from the
+		//wire, are:  21 21 <slot> 00 00 00 00 00  — the slot index is byte [2].
+		//It was guessed as [3] before, which read a constant 00 and pinned every
+		//port to slot 0, so the game enumerated four identical pads and gave up.
+		if(tapEnabled)
 		{
-			m_outputBuffer[outputOffset + 0x05] = 0;
+			uint8 wanted = m_inputBuffer[0x02];
+			if(wanted < Multitap::MAX_SLOTS) m_currentSlot[physPort] = wanted;
 		}
-		Multitap::Trace("Sio2::ChangeSlot port=%d -> slot=%d ok=%d", physPort, m_currentSlot[physPort], tapEnabled ? 1 : 0);
-		CLog::GetInstance().Print(LOG_NAME, "Multitap: ChangeSlot(port = %d, slot = %d);\r\n",
-		                          physPort, m_currentSlot[physPort]);
 		break;
-	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
 		CLog::GetInstance().Warn(LOG_NAME, "Multitap: Unknown command 0x%02X.\r\n", cmd);
 		break;

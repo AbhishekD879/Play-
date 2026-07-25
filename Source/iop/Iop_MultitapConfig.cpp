@@ -20,7 +20,7 @@ namespace Iop
 			bool g_slotSwitching = false;
 			//Diagnostics are bounded: a runaway trace must not be able to wedge
 			//the emulator, which is exactly what an unbounded one did.
-			constexpr unsigned int TRACE_BUDGET = 400;
+			constexpr unsigned int TRACE_BUDGET = 3000;
 			unsigned int g_traceCount = 0;
 			char g_lastTrace[512] = {0};
 		}
