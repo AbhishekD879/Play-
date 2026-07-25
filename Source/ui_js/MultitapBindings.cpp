@@ -42,11 +42,13 @@ namespace
 	}
 
 	void SetMultitapTracing(bool on) { Iop::Multitap::SetTracing(on); }
+	void SetMultitapSlotSwitching(bool on) { Iop::Multitap::SetSlotSwitching(on); }
 }
 
 EMSCRIPTEN_BINDINGS(PortfolioMultitap)
 {
 	emscripten::function("setMultitapTracing", &SetMultitapTracing);
+	emscripten::function("setMultitapSlotSwitching", &SetMultitapSlotSwitching);
 	emscripten::function("setMultitapEnabled", &SetMultitapEnabled);
 	emscripten::function("getMultitapEnabled", &GetMultitapEnabled);
 	emscripten::function("getMultitapPadCount", &GetMultitapPadCount);

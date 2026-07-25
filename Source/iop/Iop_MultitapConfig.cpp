@@ -17,12 +17,16 @@ namespace Iop
 			//would mean editing far more upstream files than it is worth).
 			std::array<bool, MAX_PORTS> g_enabled = {false, false};
 			bool g_tracing = false;
+			bool g_slotSwitching = false;
 			//Diagnostics are bounded: a runaway trace must not be able to wedge
 			//the emulator, which is exactly what an unbounded one did.
 			constexpr unsigned int TRACE_BUDGET = 400;
 			unsigned int g_traceCount = 0;
 			char g_lastTrace[512] = {0};
 		}
+
+		bool SlotSwitchingEnabled() { return g_slotSwitching; }
+		void SetSlotSwitching(bool on) { g_slotSwitching = on; }
 
 		bool IsTracing() { return g_tracing; }
 		void SetTracing(bool on) { g_tracing = on; g_traceCount = 0; g_lastTrace[0] = 0; }

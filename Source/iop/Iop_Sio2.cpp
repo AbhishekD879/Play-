@@ -547,7 +547,17 @@ void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dst
 		//ChangeSlot — upstream always answered 0 (failure) and tracked nothing.
 		//The requested slot arrives in the input buffer; latch it so the next
 		//controller poll on this port reads the right pad.
-		if(tapEnabled)
+		//★ The slot index's offset in the request is NOT verified. Acting on a
+		//guess here is what killed player one: port N reads pad (N*4 + slot), so
+		//a wrong slot means pad 0 is never polled again and player one silently
+		//disappears — on the multitap engine only, which is exactly what was
+		//observed. Until the offset is confirmed against a real game, DUMP the
+		//payload and leave the slot alone. Reporting the tap is safe; driving it
+		//on a guess is not.
+		Multitap::Trace("Sio2::ChangeSlot port=%d raw=%02X %02X %02X %02X %02X %02X",
+		                physPort, m_inputBuffer[0], m_inputBuffer[1], m_inputBuffer[2],
+		                m_inputBuffer[3], m_inputBuffer[4], m_inputBuffer[5]);
+		if(tapEnabled && Multitap::SlotSwitchingEnabled())
 		{
 			uint8 wanted = m_inputBuffer[0x03];
 			if(wanted < Multitap::MAX_SLOTS)

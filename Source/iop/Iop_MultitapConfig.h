@@ -32,6 +32,11 @@ namespace Iop
 		//wasm we ship. This is a separate, always-compiled trace that emscripten
 		//routes to console.log, gated at runtime so it costs nothing when off.
 		//It is the only way to see what a real game actually asks for.
+		//Slot switching acts on an UNVERIFIED payload offset and can strand
+		//player one. Off unless explicitly enabled.
+		bool SlotSwitchingEnabled();
+		void SetSlotSwitching(bool);
+
 		bool IsTracing();
 		void SetTracing(bool);
 		void Trace(const char* fmt, ...);
