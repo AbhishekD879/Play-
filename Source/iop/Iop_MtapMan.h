@@ -4,6 +4,9 @@
 #include "Iop_SifMan.h"
 #include "Iop_SifModuleProvider.h"
 #include "../SifModuleAdapter.h"
+//>>> PLAYSTATION-PORTFOLIO MULTITAP
+#include "Iop_MultitapConfig.h"
+//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
 namespace Iop
 {
@@ -32,6 +35,11 @@ namespace Iop
 		bool Invoke903(uint32, uint32*, uint32, uint32*, uint32, uint8*);
 
 		uint32 PortOpen(uint32);
+		//>>> PLAYSTATION-PORTFOLIO MULTITAP
+		uint32 PortClose(uint32);
+		uint32 GetConnection(uint32);
+		uint32 GetSlotNumber(uint32);
+		//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
 		CSifModuleAdapter m_module901;
 		CSifModuleAdapter m_module902;

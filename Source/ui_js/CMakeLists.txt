@@ -46,6 +46,9 @@ add_executable(Play
 	InputProviderEmscripten.cpp
 	InputProviderEmscripten.h
 	Main.cpp
+	#>>> PLAYSTATION-PORTFOLIO MULTITAP
+	MultitapBindings.cpp
+	#<<< PLAYSTATION-PORTFOLIO MULTITAP
 	Ps2VmJs.cpp
 	Ps2VmJs.h
 )

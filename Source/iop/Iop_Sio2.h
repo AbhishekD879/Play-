@@ -3,6 +3,9 @@
 #include "Types.h"
 #include "Iop_Intc.h"
 #include "../PadInterface.h"
+//>>> PLAYSTATION-PORTFOLIO MULTITAP
+#include "Iop_MultitapConfig.h"
+//<<< PLAYSTATION-PORTFOLIO MULTITAP
 #include <deque>
 #include <array>
 
@@ -63,7 +66,13 @@ namespace Iop
 		enum
 		{
 			MAX_REGS = 16,
-			MAX_PADS = 2,
+			//>>> PLAYSTATION-PORTFOLIO MULTITAP
+			//Was 2 (one pad per physical port). Now 8 = 2 ports x 4 multitap
+			//slots. MAX_PORTS below is unrelated — it is the count of SIO2
+			//*register* ports in the device's register file, not controller
+			//ports; it stays 4.
+			MAX_PADS = Multitap::MAX_PADS,
+			//<<< PLAYSTATION-PORTFOLIO MULTITAP
 			MAX_PORTS = 4
 		};
 
@@ -99,5 +108,10 @@ namespace Iop
 		ByteBufferType m_outputBuffer;
 
 		std::array<PADSTATE, MAX_PADS> m_padState;
+		//>>> PLAYSTATION-PORTFOLIO MULTITAP
+		//Which slot the multitap on each controller port is currently addressing.
+		//Set by the ChangeSlot command; read by ProcessController.
+		std::array<uint8, Multitap::MAX_PORTS> m_currentSlot;
+		//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	};
 }

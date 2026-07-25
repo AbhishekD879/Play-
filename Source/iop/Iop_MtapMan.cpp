@@ -45,6 +45,20 @@ bool CMtapMan::Invoke901(uint32 method, uint32* args, uint32 argsSize, uint32* r
 	case 1:
 		ret[1] = PortOpen(args[0]);
 		break;
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//Upstream implements method 1 only. libmtap's other entry points fell
+	//through to the "unknown method" warning and returned nothing, which reads
+	//to a game as "no multitap".
+	case 2:
+		ret[1] = PortClose(args[0]);
+		break;
+	case 3:
+		ret[1] = GetConnection(args[0]);
+		break;
+	case 4:
+		ret[1] = GetSlotNumber(args[0]);
+		break;
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
 		CLog::GetInstance().Warn(LOG_NAME, "Unknown method invoked (0x%08X, 0x%08X).\r\n", 0x901, method);
 		break;
@@ -74,8 +88,37 @@ bool CMtapMan::Invoke903(uint32 method, uint32* args, uint32 argsSize, uint32* r
 	return true;
 }
 
+//>>> PLAYSTATION-PORTFOLIO MULTITAP
+//libmtap.h contract: "1 on success; !1 on failure". Upstream returned 0
+//unconditionally — a deliberate stub telling every game there is no tap. We now
+//answer honestly per port, so a port with no tap still behaves exactly as before.
 uint32 CMtapMan::PortOpen(uint32 port)
 {
-	CLog::GetInstance().Warn(LOG_NAME, "PortOpen(port = %d);\r\n", port);
-	return 0;
+	bool enabled = Multitap::IsEnabled(port);
+	CLog::GetInstance().Print(LOG_NAME, "PortOpen(port = %d) = %d;\r\n", port, enabled ? 1 : 0);
+	return enabled ? 1 : 0;
 }
+
+uint32 CMtapMan::PortClose(uint32 port)
+{
+	bool enabled = Multitap::IsEnabled(port);
+	CLog::GetInstance().Print(LOG_NAME, "PortClose(port = %d) = %d;\r\n", port, enabled ? 1 : 0);
+	return enabled ? 1 : 0;
+}
+
+//mtapGetConnection: 1 when a tap is attached to an opened port.
+uint32 CMtapMan::GetConnection(uint32 port)
+{
+	bool enabled = Multitap::IsEnabled(port);
+	CLog::GetInstance().Print(LOG_NAME, "GetConnection(port = %d) = %d;\r\n", port, enabled ? 1 : 0);
+	return enabled ? 1 : 0;
+}
+
+//Slots available on the port: 4 with a tap, 1 without.
+uint32 CMtapMan::GetSlotNumber(uint32 port)
+{
+	uint32 slots = Multitap::IsEnabled(port) ? Multitap::MAX_SLOTS : 1;
+	CLog::GetInstance().Print(LOG_NAME, "GetSlotNumber(port = %d) = %d;\r\n", port, slots);
+	return slots;
+}
+//<<< PLAYSTATION-PORTFOLIO MULTITAP

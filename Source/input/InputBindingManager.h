@@ -25,7 +25,10 @@ public:
 
 	enum
 	{
-		MAX_PADS = 4,
+		//>>> PLAYSTATION-PORTFOLIO MULTITAP
+		//Was 4. Two multitaps address 8 pads (2 ports x 4 slots).
+		MAX_PADS = 8,
+		//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	};
 
 	enum BINDINGTYPE

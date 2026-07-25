@@ -3,6 +3,9 @@
 #include <cassert>
 #include "Log.h"
 #include "../states/RegisterStateFile.h"
+//>>> PLAYSTATION-PORTFOLIO MULTITAP
+#include "string_format.h"
+//<<< PLAYSTATION-PORTFOLIO MULTITAP
 #include "placeholder_def.h"
 
 using namespace Iop;
@@ -79,8 +82,21 @@ void CPadMan::SaveState(Framework::CZipArchiveWriter& archive) const
 {
 	auto registerFile = std::make_unique<CRegisterStateFile>(STATE_PADDATA);
 
-	registerFile->SetRegister32(STATE_PADDATA_PAD0_ADDRESS, m_padDataAddress[0]);
-	registerFile->SetRegister32(STATE_PADDATA_PAD1_ADDRESS, m_padDataAddress[1]);
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//Legacy keys stay written so a state saved here still loads in STOCK Play!
+	//(slot 0 of each port is exactly what stock understands).
+	registerFile->SetRegister32(STATE_PADDATA_PAD0_ADDRESS, m_padDataAddress[0][0]);
+	registerFile->SetRegister32(STATE_PADDATA_PAD1_ADDRESS, m_padDataAddress[1][0]);
+	//...and the full grid alongside them.
+	for(unsigned int port = 0; port < MAX_PORTS; port++)
+	{
+		for(unsigned int slot = 0; slot < MAX_SLOTS; slot++)
+		{
+			auto key = string_format("pad_address%d_%d", port, slot);
+			registerFile->SetRegister32(key.c_str(), m_padDataAddress[port][slot]);
+		}
+	}
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	registerFile->SetRegister32(STATE_PADDATA_TYPE, m_padDataType);
 
 	archive.InsertFile(std::move(registerFile));
@@ -89,16 +105,58 @@ void CPadMan::SaveState(Framework::CZipArchiveWriter& archive) const
 void CPadMan::LoadState(Framework::CZipArchiveReader& archive)
 {
 	CRegisterStateFile registerFile(*archive.BeginReadFile(STATE_PADDATA));
-	m_padDataAddress[0] = registerFile.GetRegister32(STATE_PADDATA_PAD0_ADDRESS);
-	m_padDataAddress[1] = registerFile.GetRegister32(STATE_PADDATA_PAD1_ADDRESS);
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//Seed slot 0 from the legacy keys so a state written by STOCK Play! loads
+	//cleanly, then let the per-slot keys override where present. A stock state
+	//simply has none, and GetRegister32 yields 0 — which is "closed", the
+	//correct default.
+	memset(m_padDataAddress, 0, sizeof(m_padDataAddress));
+	m_padDataAddress[0][0] = registerFile.GetRegister32(STATE_PADDATA_PAD0_ADDRESS);
+	m_padDataAddress[1][0] = registerFile.GetRegister32(STATE_PADDATA_PAD1_ADDRESS);
+	for(unsigned int port = 0; port < MAX_PORTS; port++)
+	{
+		for(unsigned int slot = 0; slot < MAX_SLOTS; slot++)
+		{
+			auto key = string_format("pad_address%d_%d", port, slot);
+			uint32 value = registerFile.GetRegister32(key.c_str());
+			if(value != 0)
+			{
+				m_padDataAddress[port][slot] = value;
+			}
+		}
+	}
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	m_padDataType = static_cast<PAD_DATA_TYPE>(registerFile.GetRegister32(STATE_PADDATA_TYPE));
 }
+
+//>>> PLAYSTATION-PORTFOLIO MULTITAP
+//The binding layer addresses pads by a flat index; this resolves it back to the
+//(port, slot) the game opened. With no tap the mapping is the identity on port,
+//so behaviour is bit-for-bit what upstream did.
+uint32 CPadMan::GetPadDataAddress(unsigned int padNumber) const
+{
+	if(padNumber >= MAX_PADS) return 0;
+	unsigned int port = 0, slot = 0;
+	if(Multitap::AnyEnabled())
+	{
+		port = padNumber / MAX_SLOTS;
+		slot = padNumber % MAX_SLOTS;
+	}
+	else
+	{
+		port = padNumber;
+		if(port >= MAX_PORTS) return 0;
+	}
+	if(port >= MAX_PORTS || slot >= MAX_SLOTS) return 0;
+	return m_padDataAddress[port][slot];
+}
+//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
 void CPadMan::SetButtonState(unsigned int padNumber, CControllerInfo::BUTTON button, bool pressed, uint8* ram)
 {
 	if(padNumber >= MAX_PADS) return;
 
-	uint32 padDataAddress = m_padDataAddress[padNumber];
+	uint32 padDataAddress = GetPadDataAddress(padNumber);
 	if(padDataAddress == 0) return;
 
 	ExecutePadDataFunction(std::bind(&CPadMan::PDF_SetButtonState, PLACEHOLDER_1, button, pressed),
@@ -109,7 +167,7 @@ void CPadMan::SetAxisState(unsigned int padNumber, CControllerInfo::BUTTON butto
 {
 	if(padNumber >= MAX_PADS) return;
 
-	uint32 padDataAddress = m_padDataAddress[padNumber];
+	uint32 padDataAddress = GetPadDataAddress(padNumber);
 	if(padDataAddress == 0) return;
 
 	ExecutePadDataFunction(std::bind(&CPadMan::PDF_SetAxisState, std::placeholders::_1, button, axisValue),
@@ -125,10 +183,14 @@ void CPadMan::Open(uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, u
 	CLog::GetInstance().Print(LOG_NAME, "Open(port = %d, slot = %d, padAreaAddr = 0x%08x);\r\n",
 	                          port, slot, address);
 
-	if(port < MAX_PADS)
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//Upstream bounded on MAX_PADS(==2) and ignored `slot`, so opening slot 1
+	//overwrote slot 0's address. Store per (port, slot).
+	if((port < MAX_PORTS) && (slot < MAX_SLOTS))
 	{
-		m_padDataAddress[port] = address;
+		m_padDataAddress[port][slot] = address;
 		m_padDataType = GetDataType(ram + address);
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
 		CLog::GetInstance().Print(LOG_NAME, "Detected data type %d.\r\n", m_padDataType);
 
@@ -152,9 +214,11 @@ void CPadMan::SetMainMode(uint32* args, uint32 argsSize, uint32* ret, uint32 ret
 
 	assert(mode <= 1);
 
-	if(port < MAX_PADS)
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	if((port < MAX_PORTS) && (slot < MAX_SLOTS))
 	{
-		uint32 padDataAddress = m_padDataAddress[port];
+		uint32 padDataAddress = m_padDataAddress[port][slot];
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 		if(padDataAddress != 0)
 		{
 			ExecutePadDataFunction(std::bind(&CPadMan::PDF_SetMode, PLACEHOLDER_1, mode ? PAD_MODE_DUALSHOCK : PAD_MODE_DIGITAL),
@@ -174,9 +238,11 @@ void CPadMan::Close(uint32* args, uint32 argsSize, uint32* ret, uint32 retSize, 
 	CLog::GetInstance().Print(LOG_NAME, "Close(port = %d, slot = %d, wait = %d);\r\n",
 	                          port, slot, wait);
 
-	if(port < MAX_PADS)
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	if((port < MAX_PORTS) && (slot < MAX_SLOTS))
 	{
-		m_padDataAddress[port] = 0;
+		m_padDataAddress[port][slot] = 0;
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	}
 
 	ret[3] = 1;

@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Iop_Module.h"
+//>>> PLAYSTATION-PORTFOLIO MULTITAP
+#include "Iop_MultitapConfig.h"
+//<<< PLAYSTATION-PORTFOLIO MULTITAP
 #include "Iop_SifMan.h"
 #include "Iop_SifModuleProvider.h"
 #include "../PadInterface.h"
@@ -41,7 +44,14 @@ namespace Iop
 	private:
 		enum
 		{
-			MAX_PADS = 2,
+			//>>> PLAYSTATION-PORTFOLIO MULTITAP
+			//Was 2 — the PS2's physical controller-port count. Kept under the
+			//clearer name MAX_PORTS; capacity now comes from the multitap slot
+			//axis, exactly as on real hardware.
+			MAX_PORTS = Multitap::MAX_PORTS,
+			MAX_SLOTS = Multitap::MAX_SLOTS,
+			MAX_PADS = Multitap::MAX_PADS,
+			//<<< PLAYSTATION-PORTFOLIO MULTITAP
 		};
 
 		struct PADDATA
@@ -192,7 +202,12 @@ namespace Iop
 		};
 
 		PAD_DATA_TYPE m_padDataType = PAD_DATA_STD;
-		uint32 m_padDataAddress[MAX_PADS]{};
+		//>>> PLAYSTATION-PORTFOLIO MULTITAP
+		//Was m_padDataAddress[MAX_PADS] indexed by port, which made slot 1
+		//overwrite slot 0. Now one EE RAM address per (port, slot).
+		uint32 m_padDataAddress[MAX_PORTS][MAX_SLOTS]{};
+		uint32 GetPadDataAddress(unsigned int) const;
+		//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
 		void Open(uint32*, uint32, uint32*, uint32, uint8*);
 		void SetMainMode(uint32*, uint32, uint32*, uint32, uint8*);

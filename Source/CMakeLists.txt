@@ -352,6 +352,10 @@ set(COMMON_SRC_FILES
 	iop/Iop_Module.cpp
 	iop/Iop_Module.h
 	iop/Iop_MtapMan.cpp
+	#>>> PLAYSTATION-PORTFOLIO MULTITAP
+	iop/Iop_MultitapConfig.cpp
+	iop/Iop_MultitapConfig.h
+	#<<< PLAYSTATION-PORTFOLIO MULTITAP
 	iop/Iop_MtapMan.h
 	iop/namco_sys147/NamcoSys147NANDReader.cpp
 	iop/namco_sys147/NamcoSys147NANDReader.h

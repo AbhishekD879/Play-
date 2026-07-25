@@ -59,6 +59,9 @@ void CSio2::Reset()
 	memset(m_ctrl1, 0, sizeof(m_ctrl1));
 	memset(m_ctrl2, 0, sizeof(m_ctrl2));
 	m_stat6C = 0;
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	m_currentSlot.fill(0);
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	memset(&m_padState, 0, sizeof(m_padState));
 	for(auto& padInfo : m_padState)
 	{
@@ -289,13 +292,20 @@ void CSio2::ProcessCommand()
 
 void CSio2::ProcessController(unsigned int portId, size_t outputOffset, uint32 dstSize, uint32 srcSize)
 {
-	if(portId < MAX_PADS)
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//Upstream: `portId < MAX_PADS` with MAX_PADS == 2, and `padId = portId & 1`.
+	//MAX_PADS is now 8, so bound against the real controller-port count instead,
+	//and resolve the pad through the multitap slot currently selected on it.
+	if(portId < Multitap::MAX_PORTS)
 	{
 		assert(dstSize >= 3);
 		assert(srcSize >= 3);
 
-		unsigned int padId = portId & 0x01;
+		unsigned int slot = Multitap::IsEnabled(portId) ? m_currentSlot[portId] : 0;
+		unsigned int padId = Multitap::PadIndex(portId, slot);
+		if(padId >= MAX_PADS) return;
 		auto& padState = m_padState[padId];
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 
 		//Write header
 		m_outputBuffer[outputOffset + 0x00] = 0xFF;
@@ -470,25 +480,57 @@ void CSio2::ProcessController(unsigned int portId, size_t outputOffset, uint32 d
 
 void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dstSize, uint32 srcSize)
 {
-	//Mark command as error/invalid to prevent MTAPMAN from reporting that there's a multitap in that slot.
-	//Time Crisis 3 refuses to check for memory card if a multitap is connected in slot 0.
-	//We don't properly support multitap at the moment, so, no point in giving the impression we have one.
-	m_stat6C = 0x10000;
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	//Upstream unconditionally marks this command as errored so MTAPMAN reports
+	//no multitap. Its reason (kept verbatim below) is a COMPATIBILITY choice,
+	//not a missing capability:
+	//
+	//    "Mark command as error/invalid to prevent MTAPMAN from reporting that
+	//     there's a multitap in that slot. Time Crisis 3 refuses to check for
+	//     memory card if a multitap is connected in slot 0. We don't properly
+	//     support multitap at the moment, so, no point in giving the impression
+	//     we have one."
+	//
+	//We now DO support it, so the suppression becomes conditional: ports without
+	//an enabled tap behave exactly as upstream (Time Crisis 3 keeps working),
+	//ports with one answer for real.
+	bool tapEnabled = Multitap::IsEnabled(portId);
+	if(!tapEnabled)
+	{
+		m_stat6C = 0x10000;
+	}
 	uint8 cmd = m_inputBuffer[1];
 	switch(cmd)
 	{
 	case 0x12:
 	case 0x13:
 		//GetSlotNumber
-		m_outputBuffer[outputOffset + 0x03] = 1;
-		CLog::GetInstance().Print(LOG_NAME, "Multitap: GetSlotNumber();\r\n");
+		m_outputBuffer[outputOffset + 0x03] = tapEnabled ? Multitap::MAX_SLOTS : 1;
+		CLog::GetInstance().Print(LOG_NAME, "Multitap: GetSlotNumber() = %d;\r\n",
+		                          tapEnabled ? Multitap::MAX_SLOTS : 1);
 		break;
 	case 0x21:
 	case 0x22:
-		//ChangeSlot
-		m_outputBuffer[outputOffset + 0x05] = 0;
-		CLog::GetInstance().Print(LOG_NAME, "Multitap: ChangeSlot();\r\n");
+		//ChangeSlot — upstream always answered 0 (failure) and tracked nothing.
+		//The requested slot arrives in the input buffer; latch it so the next
+		//controller poll on this port reads the right pad.
+		if(tapEnabled && (portId < Multitap::MAX_PORTS))
+		{
+			uint8 wanted = m_inputBuffer[0x03];
+			if(wanted < Multitap::MAX_SLOTS)
+			{
+				m_currentSlot[portId] = wanted;
+			}
+			m_outputBuffer[outputOffset + 0x05] = 1; //success
+		}
+		else
+		{
+			m_outputBuffer[outputOffset + 0x05] = 0;
+		}
+		CLog::GetInstance().Print(LOG_NAME, "Multitap: ChangeSlot(port = %d, slot = %d);\r\n",
+		                          portId, (portId < Multitap::MAX_PORTS) ? m_currentSlot[portId] : 0);
 		break;
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 	default:
 		CLog::GetInstance().Warn(LOG_NAME, "Multitap: Unknown command 0x%02X.\r\n", cmd);
 		break;

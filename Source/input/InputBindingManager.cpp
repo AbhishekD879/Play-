@@ -51,7 +51,13 @@ const char* CInputBindingManager::m_padPreferenceName[] =
 	"pad1",
 	"pad2",
 	"pad3",
-	"pad4"
+	"pad4",
+	//>>> PLAYSTATION-PORTFOLIO MULTITAP
+	"pad5",
+	"pad6",
+	"pad7",
+	"pad8"
+	//<<< PLAYSTATION-PORTFOLIO MULTITAP
 };
 
 // clang-format on
