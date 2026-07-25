@@ -310,7 +310,15 @@ void CSio2::ProcessController(unsigned int portId, size_t outputOffset, uint32 d
 
 		unsigned int slot = Multitap::IsEnabled(portId) ? m_currentSlot[portId] : 0;
 		unsigned int padId = Multitap::PadIndex(portId, slot);
-		Multitap::Trace("Sio2::Controller port=%d slot=%d pad=%d cmd=0x%02X", portId, slot, padId, m_inputBuffer[1]);
+		//Poll-rate path: only speak when the pad this port resolves to CHANGES.
+		{
+			static unsigned int lastPad[Multitap::MAX_PORTS] = {0xFFFF, 0xFFFF};
+			if(lastPad[portId] != padId)
+			{
+				lastPad[portId] = padId;
+				Multitap::Trace("Sio2::Controller port=%d -> slot=%d pad=%d", portId, slot, padId);
+			}
+		}
 		if(padId >= MAX_PADS) return;
 		auto& padState = m_padState[padId];
 	//<<< PLAYSTATION-PORTFOLIO MULTITAP
@@ -509,7 +517,17 @@ void CSio2::ProcessMultitap(unsigned int portId, size_t outputOffset, uint32 dst
 	//why the tap was never discovered even with both ports enabled.
 	unsigned int physPort = portId & 1;
 	bool tapEnabled = Multitap::IsEnabled(physPort);
-	Multitap::Trace("Sio2::Multitap q=%d port=%d cmd=0x%02X tap=%d", portId, physPort, m_inputBuffer[1], tapEnabled ? 1 : 0);
+	//Also poll-rate (a game asks GetSlotNumber constantly): report the answer
+	//once per port, and again only if it changes.
+	{
+		static int lastTap[Multitap::MAX_PORTS] = {-1, -1};
+		int now = tapEnabled ? 1 : 0;
+		if(lastTap[physPort] != now)
+		{
+			lastTap[physPort] = now;
+			Multitap::Trace("Sio2::Multitap probe q=%d port=%d tap=%d", portId, physPort, now);
+		}
+	}
 	if(!tapEnabled)
 	{
 		m_stat6C = 0x10000;
