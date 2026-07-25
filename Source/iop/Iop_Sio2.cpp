@@ -293,19 +293,24 @@ void CSio2::ProcessCommand()
 void CSio2::ProcessController(unsigned int portId, size_t outputOffset, uint32 dstSize, uint32 srcSize)
 {
 	//>>> PLAYSTATION-PORTFOLIO MULTITAP
-	//★ portId here is the SIO2 QUEUE INDEX (currentReg & 0x03), not a physical
-	//controller port. Upstream folds it with `padId = portId & 1`; an earlier
-	//version of this patch replaced that with `portId < MAX_PORTS`, which
-	//silently dropped queue indices 2 and 3. Keep upstream's fold.
-	if(true)
+	//★ Upstream guards with `portId < MAX_PADS` where MAX_PADS == 2 — so it
+	//accepts SIO2 queue indices 0 and 1 ONLY, and its `padId = portId & 0x01`
+	//is redundant belt-and-braces inside that guard.
+	//
+	//MAX_PADS is 8 here, so keeping upstream's literal expression would widen
+	//the guard to accept indices 2 and 3 — which are the MULTITAP device, not
+	//controllers. Doing that folds them onto physical ports 0/1 and clobbers
+	//player one's pad state. Guard against the controller-port count instead.
+	//(ProcessMultitap DOES fold, because that is where 2 and 3 legitimately
+	//arrive; the two functions are not symmetric.)
+	if(portId < Multitap::MAX_PORTS)
 	{
 		assert(dstSize >= 3);
 		assert(srcSize >= 3);
 
-		unsigned int physPort = portId & 1;
-		unsigned int slot = Multitap::IsEnabled(physPort) ? m_currentSlot[physPort] : 0;
-		unsigned int padId = Multitap::PadIndex(physPort, slot);
-		Multitap::Trace("Sio2::Controller q=%d port=%d slot=%d pad=%d cmd=0x%02X", portId, physPort, slot, padId, m_inputBuffer[1]);
+		unsigned int slot = Multitap::IsEnabled(portId) ? m_currentSlot[portId] : 0;
+		unsigned int padId = Multitap::PadIndex(portId, slot);
+		Multitap::Trace("Sio2::Controller port=%d slot=%d pad=%d cmd=0x%02X", portId, slot, padId, m_inputBuffer[1]);
 		if(padId >= MAX_PADS) return;
 		auto& padState = m_padState[padId];
 	//<<< PLAYSTATION-PORTFOLIO MULTITAP
