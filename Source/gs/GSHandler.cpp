@@ -561,8 +561,19 @@ void CGSHandler::Finish(bool forceWait)
 	    wait, wait);
 }
 
+//>>> PLAYSTATION-PORTFOLIO FRAME COUNTER
+// Emulation speed is the only honest measure of "is this game playable": a PS2
+// title presents ~60 (NTSC) or ~50 (PAL) frames a second, so counting real
+// flips tells us what fraction of full speed we are actually hitting. Nothing
+// outside the emulator can see this.
+namespace PortfolioFrameStats { uint64_t flips = 0; }
+//<<< PLAYSTATION-PORTFOLIO FRAME COUNTER
+
 void CGSHandler::Flip(uint32 flags)
 {
+	//>>> PLAYSTATION-PORTFOLIO FRAME COUNTER
+	PortfolioFrameStats::flips++;
+	//<<< PLAYSTATION-PORTFOLIO FRAME COUNTER
 	bool waitForCompletion = (flags & FLIP_FLAG_WAIT) != 0;
 	bool force = (flags & FLIP_FLAG_FORCE) != 0;
 	SendGSCall(

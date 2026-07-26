@@ -16,6 +16,8 @@
 #include <emscripten/bind.h>
 
 // counters live in the CodeGen library's wasm memory-function path
+namespace PortfolioFrameStats { extern uint64_t flips; }
+
 namespace PortfolioJitStats
 {
 	extern uint64_t blocksCompiled;
@@ -88,10 +90,14 @@ namespace
 	double GetJitBlocksLive()     { return static_cast<double>(PortfolioJitStats::blocksLive); }
 	double GetJitCodeBytes()      { return static_cast<double>(PortfolioJitStats::codeBytes); }
 	double GetJitCompileMs()      { return PortfolioJitStats::compileMs; }
+	/** GS presents so far. Sampled over time this is emulation speed: a PS2
+	 *  game presents ~60/s (NTSC), so 30/s means it is running at half pace. */
+	double GetFrameCount()        { return static_cast<double>(PortfolioFrameStats::flips); }
 }
 
 EMSCRIPTEN_BINDINGS(PortfolioMultitap)
 {
+	emscripten::function("getFrameCount", &GetFrameCount);
 	emscripten::function("getJitBlocksCompiled", &GetJitBlocksCompiled);
 	emscripten::function("getJitBlocksLive", &GetJitBlocksLive);
 	emscripten::function("getJitCodeBytes", &GetJitCodeBytes);
