@@ -14,9 +14,22 @@
 // Must be called BEFORE booting a disc: games latch slot counts during init.
 
 #include <emscripten/bind.h>
+#include "AppConfig.h"
+#include "Ps2VmJs.h"
+#include "PS2VM_Preferences.h"
 
 // counters live in the CodeGen library's wasm memory-function path
-namespace PortfolioFrameStats { extern uint64_t flips; }
+namespace PortfolioFrameStats { extern uint64_t flips; extern uint64_t vblanks; }
+namespace PortfolioEeScale { extern uint32_t num, den; }
+
+// defined in Main.cpp — must be declared at file scope, outside the anonymous
+// namespace, or the extern acquires internal linkage and fails to link
+extern CPs2VmJs* g_virtualMachine;
+#ifdef PROFILE
+namespace PortfolioProf { extern double ee, iop, spu, gssync, other; }
+#endif
+namespace PortfolioLastModule { extern uint8_t bytes[]; extern uint32_t size; extern uint32_t count; }
+namespace PortfolioMissingFct { extern uint32_t ptr; extern uint32_t count; }
 
 namespace PortfolioJitStats
 {
@@ -93,11 +106,75 @@ namespace
 	/** GS presents so far. Sampled over time this is emulation speed: a PS2
 	 *  game presents ~60/s (NTSC), so 30/s means it is running at half pace. */
 	double GetFrameCount()        { return static_cast<double>(PortfolioFrameStats::flips); }
+	double GetVblankCount()       { return static_cast<double>(PortfolioFrameStats::vblanks); }
+
+	// Benchmarking. The limiter paces the VM to the PS2's field rate, which caps
+	// a fast game at ~60 and hides any throughput change above that. Turning it
+	// off makes "wall time to reach N emulated frames" a pure measure of how fast
+	// the recompiled code runs. Read at boot, so set it BEFORE the disc spins.
+
+	// The PCSX2-style "EE cyclerate" underclock, using the scaling upstream
+	// already ships for its arcade drivers (SetEeFrequencyScale plumbs the
+	// ratio into the hblank/vblank/SPU/IOP tick totals). Halving the EE clock
+	// halves the instructions the recompiler must execute per emulated frame,
+	// so a host that only manages 40% real-time speed can reach 80-100% — at
+	// the cost of in-game framerate, exactly like a struggling real PS2.
+	// Call BEFORE the disc boots.
+	void SetEeFreqScale(uint32 numerator, uint32 denominator)
+	{
+		if(numerator == 0 || denominator == 0) return;
+		// stored first: ResetVM() re-applies this during the boot that follows
+		PortfolioEeScale::num = numerator;
+		PortfolioEeScale::den = denominator;
+		if(g_virtualMachine) g_virtualMachine->SetEeFrequencyScale(numerator, denominator);
+	}
+
+	void SetFrameLimit(bool on)
+	{
+		CAppConfig::GetInstance().SetPreferenceBoolean(PREF_PS2_LIMIT_FRAMERATE, on);
+	}
+#ifdef PROFILE
+	double GetProfEe()     { return PortfolioProf::ee; }
+	double GetProfIop()    { return PortfolioProf::iop; }
+	double GetProfSpu()    { return PortfolioProf::spu; }
+	double GetProfGsSync() { return PortfolioProf::gssync; }
+	double GetProfOther()  { return PortfolioProf::other; }
+#else
+	double GetProfEe()     { return -1.0; }
+	double GetProfIop()    { return -1.0; }
+	double GetProfSpu()    { return -1.0; }
+	double GetProfGsSync() { return -1.0; }
+	double GetProfOther()  { return -1.0; }
+#endif
+	/** The most recently generated wasm module — read HEAPU8 at this pointer for
+	 *  this many bytes. After a CompileError this IS the module the browser
+	 *  refused, which is the only way to disassemble what the codegen got wrong. */
+	unsigned GetLastModulePtr()   { return reinterpret_cast<unsigned>(PortfolioLastModule::bytes); }
+	unsigned GetLastModuleSize()  { return PortfolioLastModule::size; }
+	unsigned GetLastModuleCount() { return PortfolioLastModule::count; }
+	/** Function pointer the recompiler tried to call but that was never
+	 *  registered in the Wasm function registry. Resolve it from JS with
+	 *  Module.wasmTable.get(ptr) to name the culprit. */
+	unsigned GetMissingFctPtr()   { return PortfolioMissingFct::ptr; }
+	unsigned GetMissingFctCount() { return PortfolioMissingFct::count; }
 }
 
 EMSCRIPTEN_BINDINGS(PortfolioMultitap)
 {
 	emscripten::function("getFrameCount", &GetFrameCount);
+	emscripten::function("getVblankCount", &GetVblankCount);
+	emscripten::function("setEeFreqScale", &SetEeFreqScale);
+	emscripten::function("setFrameLimit", &SetFrameLimit);
+	emscripten::function("getProfEe", &GetProfEe);
+	emscripten::function("getProfIop", &GetProfIop);
+	emscripten::function("getProfSpu", &GetProfSpu);
+	emscripten::function("getProfGsSync", &GetProfGsSync);
+	emscripten::function("getProfOther", &GetProfOther);
+	emscripten::function("getLastModulePtr", &GetLastModulePtr);
+	emscripten::function("getLastModuleSize", &GetLastModuleSize);
+	emscripten::function("getLastModuleCount", &GetLastModuleCount);
+	emscripten::function("getMissingFctPtr", &GetMissingFctPtr);
+	emscripten::function("getMissingFctCount", &GetMissingFctCount);
 	emscripten::function("getJitBlocksCompiled", &GetJitBlocksCompiled);
 	emscripten::function("getJitBlocksLive", &GetJitBlocksLive);
 	emscripten::function("getJitCodeBytes", &GetJitCodeBytes);

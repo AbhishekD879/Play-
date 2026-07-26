@@ -53,6 +53,15 @@
 #define PREF_PS2_HDD_DIRECTORY_DEFAULT ("vfs/hdd")
 #define PREF_PS2_ARCADEROMS_DIRECTORY_DEFAULT ("arcaderoms")
 
+// The EE clock ratio the frontend asked for. ResetVM() re-applies it instead of
+// hardcoding 1:1, because a reset happens during every disc boot and would
+// otherwise silently discard a scale set from JS before the boot message.
+namespace PortfolioEeScale
+{
+	uint32 num = 1;
+	uint32 den = 1;
+}
+
 CPS2VM::CPS2VM()
     : m_eeProfilerZone(CProfiler::GetInstance().RegisterZone("EE"))
     , m_iopProfilerZone(CProfiler::GetInstance().RegisterZone("IOP"))
@@ -518,7 +527,7 @@ void CPS2VM::ResetVM()
 
 	CDROM0_SyncPath();
 
-	SetEeFrequencyScale(1, 1);
+	SetEeFrequencyScale(PortfolioEeScale::num, PortfolioEeScale::den);
 
 	m_hblankTicks = m_hblankTicksTotal;
 	m_vblankTicks = m_onScreenTicksTotal;
@@ -894,6 +903,19 @@ void CPS2VM::OnCrtModeChange()
 	ReloadFrameRateLimit();
 }
 
+//>>> PLAYSTATION-PORTFOLIO
+// Emulated vblank rate against the wall clock is the real speed signal.
+namespace PortfolioFrameStats { extern uint64_t vblanks; }
+#ifdef PROFILE
+// The profiler resets every frame, so its zone totals have to be drained before
+// the reset to build a cumulative picture of where host time actually goes.
+namespace PortfolioProf
+{
+	double ee = 0, iop = 0, spu = 0, gssync = 0, other = 0;
+}
+#endif
+//<<< PLAYSTATION-PORTFOLIO
+
 void CPS2VM::EmuThread()
 {
 	CreateVM();
@@ -944,6 +966,7 @@ void CPS2VM::EmuThread()
 					m_inVblank = !m_inVblank;
 					if(m_inVblank)
 					{
+						PortfolioFrameStats::vblanks++;
 						m_vblankTicks += m_vblankTicksTotal;
 						m_ee->NotifyVBlankStart();
 						m_iop->NotifyVBlankStart();
@@ -966,6 +989,18 @@ void CPS2VM::EmuThread()
 #endif
 						OnNewFrame();
 #ifdef PROFILE
+						{
+							auto stats = CProfiler::GetInstance().GetStats();
+							for(const auto& z : stats)
+							{
+								double ms = static_cast<double>(z.totalTime) / 1000.0;
+								if(z.name == "EE") PortfolioProf::ee += ms;
+								else if(z.name == "IOP") PortfolioProf::iop += ms;
+								else if(z.name == "SPU") PortfolioProf::spu += ms;
+								else if(z.name == "GSSYNC") PortfolioProf::gssync += ms;
+								else if(z.name == "OTHER") PortfolioProf::other += ms;
+							}
+						}
 						CProfiler::GetInstance().Reset();
 #endif
 						m_cpuUtilisation = CPU_UTILISATION_INFO();

@@ -566,7 +566,7 @@ void CGSHandler::Finish(bool forceWait)
 // title presents ~60 (NTSC) or ~50 (PAL) frames a second, so counting real
 // flips tells us what fraction of full speed we are actually hitting. Nothing
 // outside the emulator can see this.
-namespace PortfolioFrameStats { uint64_t flips = 0; }
+namespace PortfolioFrameStats { uint64_t flips = 0; uint64_t vblanks = 0; }
 //<<< PLAYSTATION-PORTFOLIO FRAME COUNTER
 
 void CGSHandler::Flip(uint32 flags)
