@@ -14,6 +14,15 @@
 // Must be called BEFORE booting a disc: games latch slot counts during init.
 
 #include <emscripten/bind.h>
+
+// counters live in the CodeGen library's wasm memory-function path
+namespace PortfolioJitStats
+{
+	extern uint64_t blocksCompiled;
+	extern uint64_t blocksLive;
+	extern uint64_t codeBytes;
+	extern double compileMs;
+}
 #include "../iop/Iop_MultitapConfig.h"
 #include "../input/PH_GenericInput.h"
 #include "Ps2VmJs.h"
@@ -65,10 +74,28 @@ namespace
 		    pad, static_cast<PS2::CControllerInfo::BUTTON>(button)));
 	}
 	void SetMultitapSlotSwitching(bool on) { Iop::Multitap::SetSlotSwitching(on); }
+
+	//—— JIT stats ————————————————————————————————————————————————————————
+	// "Some games are slow" and "some games die" are the same question asked
+	// twice, and neither is answerable from outside the emulator. Every
+	// recompiled block becomes a WebAssembly module the browser compiles
+	// synchronously; these four numbers say how many, how big and how long.
+	//   Module.getJitBlocksCompiled()  cumulative blocks handed to the browser
+	//   Module.getJitBlocksLive()      still resident — this one is unbounded
+	//   Module.getJitCodeBytes()       total generated wasm
+	//   Module.getJitCompileMs()       wall time lost to compiling it
+	double GetJitBlocksCompiled() { return static_cast<double>(PortfolioJitStats::blocksCompiled); }
+	double GetJitBlocksLive()     { return static_cast<double>(PortfolioJitStats::blocksLive); }
+	double GetJitCodeBytes()      { return static_cast<double>(PortfolioJitStats::codeBytes); }
+	double GetJitCompileMs()      { return PortfolioJitStats::compileMs; }
 }
 
 EMSCRIPTEN_BINDINGS(PortfolioMultitap)
 {
+	emscripten::function("getJitBlocksCompiled", &GetJitBlocksCompiled);
+	emscripten::function("getJitBlocksLive", &GetJitBlocksLive);
+	emscripten::function("getJitCodeBytes", &GetJitCodeBytes);
+	emscripten::function("getJitCompileMs", &GetJitCompileMs);
 	emscripten::function("setMultitapTracing", &SetMultitapTracing);
 	emscripten::function("getPadButton", &GetPadButton);
 	emscripten::function("setMultitapSlotSwitching", &SetMultitapSlotSwitching);
