@@ -70,3 +70,7 @@ target_link_options(Play PRIVATE "-sWASM_BIGINT")
 target_link_options(Play PRIVATE "-sOFFSCREEN_FRAMEBUFFER=1")
 target_link_options(Play PRIVATE "-sENVIRONMENT=web,worker")
 target_link_options(Play PRIVATE "-sUSE_WEBGL2=1")
+# Keep the wasm name section in Release: a trap in the field ("RuntimeError:
+# unreachable") is otherwise an anonymous frame index, and the crash the user
+# can reproduce becomes one we cannot act on. Costs size, zero runtime.
+target_link_options(Play PRIVATE "--profiling-funcs")
