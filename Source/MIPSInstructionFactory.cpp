@@ -32,7 +32,9 @@ void CMIPSInstructionFactory::SetupQuickVariables(uint32 nAddress, CMipsJitter* 
 	m_nOpcode = m_pCtx->m_pMemoryMap->GetInstruction(m_nAddress);
 }
 
-static void HandleTLBException(CMIPS*)
+// Needs external C linkage: the wasm backend resolves JumpTo targets
+// through the extern-function registry, which looks names up on Module.
+extern "C" void MIPS_HandleTLBException(CMIPS*)
 {
 	//Will exit CPU execution loop with an exception pending
 }
@@ -69,7 +71,7 @@ void CMIPSInstructionFactory::CheckTLBExceptions(bool isWrite)
 		m_codeGen->PushCst(m_instrPosition);
 		m_codeGen->Add();
 		m_codeGen->PullRel(offsetof(CMIPS, m_State.nCOP0[CCOP_SCU::EPC]));
-		m_codeGen->JumpTo(reinterpret_cast<void*>(&HandleTLBException));
+		m_codeGen->JumpTo(reinterpret_cast<void*>(&MIPS_HandleTLBException));
 	}
 	m_codeGen->EndIf();
 }

@@ -14,6 +14,62 @@ extern "C" void SWR_Proxy(uint32, uint32, CMIPS*);
 extern "C" void SDL_Proxy(uint32, uint64, CMIPS*);
 extern "C" void SDR_Proxy(uint32, uint64, CMIPS*);
 
+//>>> PLAYSTATION-PORTFOLIO MISSING CALLABLES
+// The recompiler calls these five, and none of them were registered. In a
+// release build FindFunction's miss is a null dereference that reads zeros, so
+// the codegen emitted call_indirect with signature index 0 and table index 0 —
+// a module the browser refuses, killing the VM mid-boot. Shadow of the Colossus
+// dies on TestVectorNaN, which is VU code, which is why a game like SmackDown
+// never trips it.
+//
+// TestVectorNaN and FpAddTruncate have C++ linkage, and RegisterExternFunction
+// resolves names through Module["_name"], so mangled symbols are unusable.
+// These shims give them a C name to export while the registry stays keyed on
+// the address the recompiler actually passes to Call().
+#include "ee/FpAddTruncate.h"
+#include "COP_SCU.h"
+#include "ee/PS2OS.h"
+
+void TestVectorNaN(CMIPS*, uint32, uint32);
+extern "C" void MIPS_HandleTLBException(CMIPS*);
+
+// The TLB set. PS2OS::UpdateTLBEnabledState swaps these in only once a game
+// installs a TLB exception handler, so a game that never touches the TLB —
+// SmackDown, NFS Underground 2 — runs fine with them missing, and one that does
+// dies on its first TLB-guarded memory access. That is the whole reason this
+// looked like a per-game bug rather than a missing registration.
+extern "C" uint32 Portfolio_TranslateAddress(CMIPS* context, uint32 vaddrLo)
+{
+	return CPS2OS::TranslateAddress(context, vaddrLo);
+}
+extern "C" uint32 Portfolio_TranslateAddressTLB(CMIPS* context, uint32 vaddrLo)
+{
+	return CPS2OS::TranslateAddressTLB(context, vaddrLo);
+}
+extern "C" uint32 Portfolio_CheckTLBExceptions(CMIPS* context, uint32 vaddrLo, uint32 isWrite)
+{
+	return CPS2OS::CheckTLBExceptions(context, vaddrLo, isWrite);
+}
+
+extern "C" void Portfolio_TestVectorNaN(CMIPS* context, uint32 dest, uint32 offset)
+{
+	TestVectorNaN(context, dest, offset);
+}
+extern "C" uint32 Portfolio_FpAddTruncate(uint32 a, uint32 b)
+{
+	return FpAddTruncate(a, b);
+}
+extern "C" void Portfolio_HandleTLBRead(CMIPS* context)
+{
+	CCOP_SCU::HandleTLBRead(context);
+}
+extern "C" void Portfolio_HandleTLBWrite(CMIPS* context)
+{
+	CCOP_SCU::HandleTLBWrite(context);
+}
+extern "C" void TrapHandler(CMIPS*);
+//<<< PLAYSTATION-PORTFOLIO MISSING CALLABLES
+
 void CPs2VmJs::CreateVM()
 {
 	printf("Initializing PS2VM...\r\n");
@@ -40,6 +96,25 @@ void CPs2VmJs::CreateVM()
 
 	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&SDL_Proxy), "_SDL_Proxy", "viji");
 	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&SDR_Proxy), "_SDR_Proxy", "viji");
+
+	//>>> PLAYSTATION-PORTFOLIO MISSING CALLABLES
+	// Keyed on the real function's address — that is what Call() hands the
+	// registry — while the table entry points at the exported C shim.
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&TestVectorNaN), "_Portfolio_TestVectorNaN", "viii");
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&FpAddTruncate), "_Portfolio_FpAddTruncate", "iii");
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&CCOP_SCU::HandleTLBRead), "_Portfolio_HandleTLBRead", "vi");
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&CCOP_SCU::HandleTLBWrite), "_Portfolio_HandleTLBWrite", "vi");
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&TrapHandler), "_TrapHandler", "vi");
+
+	// Reached via m_pAddrTranslator / m_TLBExceptionChecker, which are function
+	// pointers held in the CPU context — so no Call site names them literally
+	// and grepping for Call(&fn) will never turn them up.
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&CPS2OS::TranslateAddress), "_Portfolio_TranslateAddress", "iii");
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&CPS2OS::TranslateAddressTLB), "_Portfolio_TranslateAddressTLB", "iii");
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&CPS2OS::CheckTLBExceptions), "_Portfolio_CheckTLBExceptions", "iiii");
+	// JumpTo target, resolved through the same registry as Call.
+	Jitter::CWasmFunctionRegistry::RegisterFunction(reinterpret_cast<uintptr_t>(&MIPS_HandleTLBException), "_MIPS_HandleTLBException", "vi");
+	//<<< PLAYSTATION-PORTFOLIO MISSING CALLABLES
 
 	CPS2VM::CreateVM();
 }

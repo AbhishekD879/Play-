@@ -98,9 +98,13 @@ protected:
 	MIPSReflection::SUBTABLE m_ReflMfPerfTable;
 	MIPSReflection::SUBTABLE m_ReflMtPerfTable;
 
-private:
+public:
+	// The recompiler Call()s these, so the wasm backend has to take their
+	// address from outside the class to register them as extern functions.
 	static void HandleTLBRead(CMIPS*);
 	static void HandleTLBWrite(CMIPS*);
+
+private:
 
 	typedef void (CCOP_SCU::*InstructionFuncConstant)();
 
