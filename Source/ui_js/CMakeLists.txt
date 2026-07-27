@@ -70,7 +70,11 @@ target_link_options(Play PRIVATE "-sWASM_BIGINT")
 target_link_options(Play PRIVATE "-sOFFSCREEN_FRAMEBUFFER=1")
 target_link_options(Play PRIVATE "-sENVIRONMENT=web,worker")
 target_link_options(Play PRIVATE "-sUSE_WEBGL2=1")
-# Keep the wasm name section in Release: a trap in the field ("RuntimeError:
-# unreachable") is otherwise an anonymous frame index, and the crash the user
-# can reproduce becomes one we cannot act on. Costs size, zero runtime.
-target_link_options(Play PRIVATE "--profiling-funcs")
+# Field crashes must stay attributable WITHOUT paying for it on every boot.
+#
+# --profiling-funcs embeds the whole name section: it worked (it is how the
+# LQC2/SQC2 trap was found) but cost +562KB, 26% of the module, on every single
+# PS2 boot forever. A stack trace already carries the function INDEX
+# ("wasm-function[4874]") whether or not names are present, so the names can
+# live in a side file that is only fetched when something actually crashes.
+target_link_options(Play PRIVATE "--emit-symbol-map")
