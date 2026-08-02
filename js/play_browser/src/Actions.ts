@@ -21,7 +21,6 @@ export const bootFile = createAsyncThunk<void, File>('bootFile',
         const fileName = file.name;
         const fileDotPos = fileName.lastIndexOf('.');
         if(fileDotPos === -1) {
-            console.log("File name must have an extension.");
             thunkAPI.rejectWithValue(null);
             return;
         }
@@ -55,7 +54,6 @@ export const bootFile = createAsyncThunk<void, File>('bootFile',
 const reducer = createReducer(initialState, (builder) => (
     builder
         .addCase(init.fulfilled, (state, action) => {
-            console.log("init");
             state.value = "initialized";
             return state;
         })
