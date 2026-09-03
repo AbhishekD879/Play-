@@ -17,6 +17,7 @@
 #include "AppConfig.h"
 #include "Ps2VmJs.h"
 #include "PS2VM_Preferences.h"
+#include "GSH_OpenGLJs.h" // PREF_CGSH_OPENGL_RESOLUTION_FACTOR
 
 // counters live in the CodeGen library's wasm memory-function path
 namespace PortfolioFrameStats { extern uint64_t flips; extern uint64_t vblanks; }
@@ -133,6 +134,34 @@ namespace
 	{
 		CAppConfig::GetInstance().SetPreferenceBoolean(PREF_PS2_LIMIT_FRAMERATE, on);
 	}
+
+	// Internal render resolution: the GS draws every framebuffer at N× the PS2's
+	// native size, which is what turns a 512×448 game into a clean 1024×896 or
+	// 1536×1344 picture — the same lever PCSX2 and Play!'s own Qt UI expose. The
+	// preference already exists upstream (renderer.opengl.resfactor); this only
+	// makes it reachable from JavaScript.
+	//
+	// Applies LIVE: NotifyPreferencesChanged is marshalled onto the GS thread by
+	// SendGSCall, where the OpenGL handler reloads the pref and drops its cached
+	// framebuffers/depthbuffers so they are recreated at the new scale. Also safe
+	// before boot — the value is simply read at GS initialisation.
+	void SetResolutionFactor(uint32 factor)
+	{
+		if(factor < 1 || factor > 4) return; // 4× of 640×448 is already 2560×1792 — anything past that is a hang on a phone
+		CAppConfig::GetInstance().SetPreferenceInteger(PREF_CGSH_OPENGL_RESOLUTION_FACTOR, factor);
+		if(g_virtualMachine)
+		{
+			if(auto gs = g_virtualMachine->GetGSHandler())
+			{
+				gs->NotifyPreferencesChanged();
+			}
+		}
+	}
+
+	uint32 GetResolutionFactor()
+	{
+		return static_cast<uint32>(CAppConfig::GetInstance().GetPreferenceInteger(PREF_CGSH_OPENGL_RESOLUTION_FACTOR));
+	}
 #ifdef PROFILE
 	double GetProfEe()     { return PortfolioProf::ee; }
 	double GetProfIop()    { return PortfolioProf::iop; }
@@ -165,6 +194,8 @@ EMSCRIPTEN_BINDINGS(PortfolioMultitap)
 	emscripten::function("getVblankCount", &GetVblankCount);
 	emscripten::function("setEeFreqScale", &SetEeFreqScale);
 	emscripten::function("setFrameLimit", &SetFrameLimit);
+	emscripten::function("setResolutionFactor", &SetResolutionFactor);
+	emscripten::function("getResolutionFactor", &GetResolutionFactor);
 	emscripten::function("getProfEe", &GetProfEe);
 	emscripten::function("getProfIop", &GetProfIop);
 	emscripten::function("getProfSpu", &GetProfSpu);
