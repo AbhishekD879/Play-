@@ -162,6 +162,24 @@ namespace
 	{
 		return static_cast<uint32>(CAppConfig::GetInstance().GetPreferenceInteger(PREF_CGSH_OPENGL_RESOLUTION_FACTOR));
 	}
+	// Presentation (output) size. Main.cpp hardcodes 640x480 to match the HTML
+	// canvas, so a resolution factor of 2 or 3 renders a 1280x896 or 1920x1344
+	// frame only to squeeze it back through 640x480 at Flip — on screen that is
+	// supersampling, not detail. JavaScript grows the canvas backing store and
+	// reports the new size here. The GS thread is the only reader of
+	// m_presentationParams, so the write is marshalled onto it.
+	void SetPresentationSize(uint32 width, uint32 height)
+	{
+		if(width < 64 || height < 64 || width > 4096 || height > 4096) return;
+		if(!g_virtualMachine) return;
+		auto gs = g_virtualMachine->GetGSHandler();
+		if(!gs) return;
+		CGSHandler::PRESENTATION_PARAMS params;
+		params.windowWidth = width;
+		params.windowHeight = height;
+		params.mode = CGSHandler::PRESENTATION_MODE_FIT;
+		gs->SendGSCall([gs, params]() { gs->SetPresentationParams(params); });
+	}
 #ifdef PROFILE
 	double GetProfEe()     { return PortfolioProf::ee; }
 	double GetProfIop()    { return PortfolioProf::iop; }
@@ -196,6 +214,7 @@ EMSCRIPTEN_BINDINGS(PortfolioMultitap)
 	emscripten::function("setFrameLimit", &SetFrameLimit);
 	emscripten::function("setResolutionFactor", &SetResolutionFactor);
 	emscripten::function("getResolutionFactor", &GetResolutionFactor);
+	emscripten::function("setPresentationSize", &SetPresentationSize);
 	emscripten::function("getProfEe", &GetProfEe);
 	emscripten::function("getProfIop", &GetProfIop);
 	emscripten::function("getProfSpu", &GetProfSpu);
